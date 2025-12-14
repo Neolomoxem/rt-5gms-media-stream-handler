@@ -3,6 +3,7 @@ package com.fivegmag.a5gmsmediastreamhandler.player.exoplayer
 import android.content.Context
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.fivegmag.a5gmscommonlibrary.cmcd.CmcdRequest
 
 interface IExoPlayerAdapter {
 
@@ -11,6 +12,7 @@ interface IExoPlayerAdapter {
         context: Context
     )
 
+    fun setCmcdConfiguration(cmcdRequest: CmcdRequest?)
     fun attach(url: String, contentType: String = "")
     fun hasActiveMediaItem() : Boolean
     fun getCurrentManifestUri(): String

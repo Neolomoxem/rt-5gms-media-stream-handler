@@ -43,6 +43,7 @@ class SessionController(
 
             if (dashEntryPoints.isNotEmpty()) {
                 val mpdUrl = dashEntryPoints[0].locator
+                exoPlayerAdapter.setCmcdConfiguration(playbackRequest.cmcdRequest)
                 exoPlayerAdapter.attach(mpdUrl, ContentTypes.DASH)
                 exoPlayerAdapter.preload()
                 exoPlayerAdapter.play()

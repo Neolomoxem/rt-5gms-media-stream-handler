@@ -17,11 +17,13 @@ import androidx.media3.exoplayer.upstream.CmcdConfiguration.MODE_QUERY_PARAMETER
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.ui.PlayerView
+import com.fivegmag.a5gmscommonlibrary.cmcd.CmcdConfiguration as CmcdConfig
+import com.fivegmag.a5gmscommonlibrary.cmcd.CmcdRequest
+import com.fivegmag.a5gmscommonlibrary.cmcd.CmcdType
 import com.fivegmag.a5gmscommonlibrary.helpers.ContentTypes
 import com.fivegmag.a5gmscommonlibrary.helpers.PlayerStates
 import com.fivegmag.a5gmscommonlibrary.helpers.StatusInformation
 import com.fivegmag.a5gmscommonlibrary.helpers.UserAgentTokens
-import com.google.common.collect.ImmutableListMultimap
 import java.util.UUID
 
 @UnstableApi
@@ -33,7 +35,8 @@ class ExoPlayerAdapter() : IExoPlayerAdapter {
     private lateinit var activeManifestUrl: String
     private lateinit var playerListener: ExoPlayerListener
     private lateinit var bandwidthMeter: DefaultBandwidthMeter
-
+    private var cmcdRequest: CmcdRequest? = null
+    private var allowedCmcdKeys: Set<String>? = null
 
     override fun initialize(
         exoPlayerView: PlayerView,
@@ -52,11 +55,43 @@ class ExoPlayerAdapter() : IExoPlayerAdapter {
                 val dataSource = httpDataSourceFactory.createDataSource()
                 dataSource
             }
-        val cmcdConfigurationFactory = object : CmcdConfiguration.Factory {
-            override fun createCmcdConfiguration(mediaItem: MediaItem): CmcdConfiguration {
+        val cmcdConfigurationFactory = createCmcdConfigurationFactory()
+        playerInstance = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(context)
+                    .setDataSourceFactory(dataSourceFactory)
+                    .setCmcdConfigurationFactory(cmcdConfigurationFactory)
+            )
+            .build()
+        playerInstance.addAnalyticsListener(EventLogger())
+        bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
+        playerView = exoPlayerView
+        playerView.player = playerInstance
+        playerListener =
+            ExoPlayerListener(playerInstance, playerView)
+        playerInstance.addAnalyticsListener(playerListener)
+    }
+
+    override fun setCmcdConfiguration(cmcdRequest: CmcdRequest?) {
+        this.cmcdRequest = cmcdRequest
+        this.allowedCmcdKeys = cmcdRequest?.cmcdConfigurations
+            ?.flatMap { config -> config.keys ?: emptyList() }
+            ?.toSet()
+    }
+
+    private fun createCmcdConfigurationFactory(): CmcdConfiguration.Factory {
+        return object : CmcdConfiguration.Factory {
+            override fun createCmcdConfiguration(mediaItem: MediaItem): CmcdConfiguration? {
+                if (cmcdRequest == null || cmcdRequest?.cmcdConfigurations.isNullOrEmpty()) {
+                    return null
+                }
+
                 val cmcdRequestConfig = object : CmcdConfiguration.RequestConfig {
                     override fun isKeyAllowed(key: String): Boolean {
-                        return true
+                        if (allowedCmcdKeys.isNullOrEmpty()) {
+                            return true
+                        }
+                        return allowedCmcdKeys?.contains(key) == true
                     }
 
                     override fun getRequestedMaximumThroughputKbps(throughputKbps: Int): Int {
@@ -75,20 +110,6 @@ class ExoPlayerAdapter() : IExoPlayerAdapter {
                 )
             }
         }
-        playerInstance = ExoPlayer.Builder(context)
-            .setMediaSourceFactory(
-                DefaultMediaSourceFactory(context)
-                    .setDataSourceFactory(dataSourceFactory)
-                    .setCmcdConfigurationFactory(cmcdConfigurationFactory)
-            )
-            .build()
-        playerInstance.addAnalyticsListener(EventLogger())
-        bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
-        playerView = exoPlayerView
-        playerView.player = playerInstance
-        playerListener =
-            ExoPlayerListener(playerInstance, playerView)
-        playerInstance.addAnalyticsListener(playerListener)
     }
 
     override fun attach(url: String, contentType: String) {
