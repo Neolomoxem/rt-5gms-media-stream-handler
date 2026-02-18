@@ -14,11 +14,13 @@ import androidx.media3.exoplayer.dash.manifest.DashManifest
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.CmcdConfiguration
 import androidx.media3.exoplayer.upstream.CmcdConfiguration.MODE_QUERY_PARAMETER
+import androidx.media3.exoplayer.upstream.CmcdConfiguration.MODE_REQUEST_HEADER
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.ui.PlayerView
 import com.fivegmag.a5gmscommonlibrary.cmcd.CmcdConfiguration as CmcdConfig
 import com.fivegmag.a5gmscommonlibrary.cmcd.CmcdRequest
+import com.fivegmag.a5gmscommonlibrary.cmcd.CmcdTransmissionMode
 import com.fivegmag.a5gmscommonlibrary.cmcd.CmcdType
 import com.fivegmag.a5gmscommonlibrary.helpers.ContentTypes
 import com.fivegmag.a5gmscommonlibrary.helpers.PlayerStates
@@ -37,6 +39,7 @@ class ExoPlayerAdapter() : IExoPlayerAdapter {
     private lateinit var bandwidthMeter: DefaultBandwidthMeter
     private var cmcdRequest: CmcdRequest? = null
     private var allowedCmcdKeys: Set<String>? = null
+    private var sessionId: String? = null
 
     override fun initialize(
         exoPlayerView: PlayerView,
@@ -72,8 +75,9 @@ class ExoPlayerAdapter() : IExoPlayerAdapter {
         playerInstance.addAnalyticsListener(playerListener)
     }
 
-    override fun setCmcdConfiguration(cmcdRequest: CmcdRequest?) {
+    override fun setCmcdConfiguration(cmcdRequest: CmcdRequest?, sessionId: String) {
         this.cmcdRequest = cmcdRequest
+        this.sessionId = sessionId
         this.allowedCmcdKeys = cmcdRequest?.cmcdConfigurations
             ?.flatMap { config -> config.keys ?: emptyList() }
             ?.toSet()
@@ -81,17 +85,16 @@ class ExoPlayerAdapter() : IExoPlayerAdapter {
 
     private fun createCmcdConfigurationFactory(): CmcdConfiguration.Factory {
         return object : CmcdConfiguration.Factory {
-            override fun createCmcdConfiguration(mediaItem: MediaItem): CmcdConfiguration? {
-                if (cmcdRequest == null || cmcdRequest?.cmcdConfigurations.isNullOrEmpty()) {
-                    return null
-                }
-
+            override fun createCmcdConfiguration(mediaItem: MediaItem): CmcdConfiguration {
                 val cmcdRequestConfig = object : CmcdConfiguration.RequestConfig {
                     override fun isKeyAllowed(key: String): Boolean {
+                        if (cmcdRequest == null || cmcdRequest?.cmcdConfigurations.isNullOrEmpty()) {
+                            return false
+                        }
                         if (allowedCmcdKeys.isNullOrEmpty()) {
                             return true
                         }
-                        return allowedCmcdKeys?.contains(key) == true
+                        return key == CmcdConfiguration.KEY_SESSION_ID || allowedCmcdKeys?.contains(key) == true
                     }
 
                     override fun getRequestedMaximumThroughputKbps(throughputKbps: Int): Int {
@@ -99,14 +102,19 @@ class ExoPlayerAdapter() : IExoPlayerAdapter {
                     }
                 }
 
-                val sessionId = UUID.randomUUID().toString()
-                val contentId = UUID.randomUUID().toString()
+                val contentId = cmcdRequest?.contentId
+
+                val mode = if (cmcdRequest?.transmissionMode == CmcdTransmissionMode.HTTP_HEADER) {
+                    MODE_REQUEST_HEADER
+                } else {
+                    MODE_QUERY_PARAMETER
+                }
 
                 return CmcdConfiguration(
-                    sessionId,
+                    sessionId ?: UUID.randomUUID().toString(),
                     contentId,
                     cmcdRequestConfig,
-                    MODE_QUERY_PARAMETER
+                    mode
                 )
             }
         }

@@ -12,7 +12,7 @@ interface IExoPlayerAdapter {
         context: Context
     )
 
-    fun setCmcdConfiguration(cmcdRequest: CmcdRequest?)
+    fun setCmcdConfiguration(cmcdRequest: CmcdRequest?, sessionId: String)
     fun attach(url: String, contentType: String = "")
     fun hasActiveMediaItem() : Boolean
     fun getCurrentManifestUri(): String
